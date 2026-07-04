@@ -1,10 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore.js'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import Login from './pages/Login.jsx'
+import Register from './pages/Register.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 
 const Placeholder = ({ name }) => (
   <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
-    {name} — coming soon
+    {name} — coming in next phase
   </div>
 )
 
@@ -36,9 +39,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Placeholder name="Login" />} />
-        <Route path="/register" element={<Placeholder name="Register" />} />
-        <Route path="/dashboard" element={<ProtectedRoute><Placeholder name="Dashboard" /></ProtectedRoute>} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/jobs" element={<Placeholder name="Job listings" />} />
         <Route path="/jobs/:id" element={<Placeholder name="Job detail" />} />
         <Route path="/resume" element={<ProtectedRoute role="candidate"><Placeholder name="Resume upload" /></ProtectedRoute>} />
