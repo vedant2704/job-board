@@ -1,10 +1,23 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore.js'
+import api from '../lib/api.js'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
   const isEmployer = user?.role === 'employer'
+
+  const [myJobs, setMyJobs] = useState([])
+  const [loadingJobs, setLoadingJobs] = useState(isEmployer)
+
+  useEffect(() => {
+    if (!isEmployer) return
+    api.get('/api/jobs/employer/my-jobs')
+      .then(({ data }) => setMyJobs(data.jobs))
+      .catch(console.error)
+      .finally(() => setLoadingJobs(false))
+  }, [isEmployer])
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -50,7 +63,7 @@ export default function Dashboard() {
         </div>
 
         {/* Quick action cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
           {isEmployer ? (
             <>
               <ActionCard
@@ -61,7 +74,7 @@ export default function Dashboard() {
               />
               <ActionCard
                 icon="👥" title="Browse Jobs"
-                desc="View all your posted jobs and manage applicants"
+                desc="View all public job listings"
                 onClick={() => navigate('/jobs')}
                 color="blue"
               />
@@ -89,6 +102,38 @@ export default function Dashboard() {
             </>
           )}
         </div>
+
+        {/* Employer: list of posted jobs with applicant links */}
+        {isEmployer && (
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 mb-4">Your posted jobs</h2>
+            {loadingJobs ? (
+              <div className="space-y-3">
+                {[...Array(2)].map((_, i) => <div key={i} className="h-16 bg-white border border-gray-200 rounded-xl animate-pulse" />)}
+              </div>
+            ) : myJobs.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm bg-white border border-gray-200 rounded-xl">
+                You haven't posted any jobs yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {myJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    onClick={() => navigate(`/applicants/${job.id}`)}
+                    className="w-full text-left bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between hover:border-violet-300 hover:shadow-sm transition-all"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm">{job.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{job.location} · {job.status === 'active' ? 'Active' : 'Closed'}</p>
+                    </div>
+                    <span className="text-xs text-violet-600 font-medium">View applicants →</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   )

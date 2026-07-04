@@ -4,11 +4,13 @@ import ProtectedRoute from './components/ProtectedRoute.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import JobListings from './pages/JobListings.jsx'
+import JobDetail from './pages/JobDetail.jsx'
+import PostJob from './pages/PostJob.jsx'
+import Applicants from './pages/Applicants.jsx'
 
 const Placeholder = ({ name }) => (
-  <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
-    {name} — coming in next phase
-  </div>
+  <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">{name} — coming in next phase</div>
 )
 
 const Home = () => {
@@ -41,13 +43,13 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/jobs" element={<JobListings />} />
+        <Route path="/jobs/:id" element={<JobDetail />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/jobs" element={<Placeholder name="Job listings" />} />
-        <Route path="/jobs/:id" element={<Placeholder name="Job detail" />} />
+        <Route path="/post-job" element={<ProtectedRoute role="employer"><PostJob /></ProtectedRoute>} />
+        <Route path="/applicants/:jobId" element={<ProtectedRoute role="employer"><Applicants /></ProtectedRoute>} />
         <Route path="/resume" element={<ProtectedRoute role="candidate"><Placeholder name="Resume upload" /></ProtectedRoute>} />
         <Route path="/matches" element={<ProtectedRoute role="candidate"><Placeholder name="AI matches" /></ProtectedRoute>} />
-        <Route path="/post-job" element={<ProtectedRoute role="employer"><Placeholder name="Post job" /></ProtectedRoute>} />
-        <Route path="/applicants/:jobId" element={<ProtectedRoute role="employer"><Placeholder name="Applicants" /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
