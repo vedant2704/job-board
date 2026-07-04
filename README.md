@@ -34,7 +34,7 @@ App → http://localhost:5173
 
 ## Build Phases
 - [x] Phase 1 — Project setup & scaffolding
-- [ ] Phase 2 — Auth (register, login, JWT, roles)
+- [x] Phase 2 — Auth (register, login, JWT, roles)
 - [ ] Phase 3 — Job listings CRUD
 - [ ] Phase 4 — AI matching (OpenAI + Pinecone)
 - [ ] Phase 5 — Resume upload + employer view
