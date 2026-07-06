@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from pydantic import BaseModel
 from typing import Optional
 from app.config.database import get_db
+from app.config.settings import settings
 from app.models.job import Job, JobType, JobStatus
 from app.models.application import Application, ApplicationStatus
 from app.middleware.auth import get_current_user, require_employer, require_candidate
@@ -61,12 +62,7 @@ def list_jobs(
 
     total = q.count()
     jobs = q.order_by(Job.created_at.desc()).offset(skip).limit(limit).all()
-    return {
-        "jobs": [j.to_dict(include_employer=True) for j in jobs],
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-    }
+    return {"jobs": [j.to_dict() for j in jobs], "total": total}
 
 
 @router.get("/{job_id}")
@@ -76,11 +72,13 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Job not found")
     return job.to_dict(include_employer=True)
 
+
 # ── Employer endpoints ────────────────────────────────────────────────────────
 
 @router.post("/", status_code=201)
 def create_job(
     body: JobCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     employer: User = Depends(require_employer),
 ):
@@ -92,7 +90,13 @@ def create_job(
     db.add(job)
     db.commit()
     db.refresh(job)
-    # Phase 4: trigger embedding in background
+
+    # Phase 4: embed the job listing in the background so it becomes searchable via AI matching
+    background_tasks.add_task(
+        embed_job_background,
+        str(job.id), job.title, job.description, job.skills_required or [],
+        job.location, job.company, job.job_type, settings.DATABASE_URL,
+    )
     return job.to_dict()
 
 
@@ -100,6 +104,7 @@ def create_job(
 def update_job(
     job_id: str,
     body: JobUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     employer: User = Depends(require_employer),
 ):
@@ -109,16 +114,29 @@ def update_job(
     if str(job.employer_id) != str(employer.id):
         raise HTTPException(403, "Not your job listing")
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    updated_fields = body.model_dump(exclude_none=True)
+    for field, value in updated_fields.items():
         setattr(job, field, value)
     db.commit()
     db.refresh(job)
+
+    # Re-embed if any content-relevant field changed, or drop from Pinecone if closed
+    content_fields = {"title", "description", "location", "skills_required"}
+    if job.status == JobStatus.closed:
+        background_tasks.add_task(remove_job_embedding_background, str(job.id))
+    elif content_fields & updated_fields.keys():
+        background_tasks.add_task(
+            embed_job_background,
+            str(job.id), job.title, job.description, job.skills_required or [],
+            job.location, job.company, job.job_type, settings.DATABASE_URL,
+        )
     return job.to_dict()
 
 
 @router.delete("/{job_id}")
 def delete_job(
     job_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     employer: User = Depends(require_employer),
 ):
@@ -129,6 +147,7 @@ def delete_job(
         raise HTTPException(403, "Not your job listing")
     job.status = JobStatus.closed
     db.commit()
+    background_tasks.add_task(remove_job_embedding_background, str(job.id))
     return {"message": "Job closed"}
 
 
@@ -178,11 +197,10 @@ def apply_to_job(
 ):
     job = db.query(Job).filter(Job.id == job_id, Job.status == JobStatus.active).first()
     if not job:
-        raise HTTPException(404, "Job not found or closed")
+        raise HTTPException(404, "Job not found")
 
     existing = db.query(Application).filter(
-        Application.candidate_id == candidate.id,
-        Application.job_id == job_id,
+        Application.job_id == job_id, Application.candidate_id == candidate.id
     ).first()
     if existing:
         raise HTTPException(409, "Already applied to this job")
@@ -228,3 +246,29 @@ def update_application_status(
     app.status = status
     db.commit()
     return {"message": f"Status updated to {status}"}
+
+
+# ── Background job embedding ─────────────────────────────────────────────────
+
+async def embed_job_background(job_id: str, title: str, description: str, skills: list, location: str, company: str, job_type: str, db_url: str):
+    """Embed a job listing and upsert to Pinecone after creation/update."""
+    from app.services.embedding_service import get_embedding, build_job_text
+    from app.services.pinecone_service import upsert_job as _upsert_job
+
+    try:
+        text = build_job_text(title, description, skills, location)
+        embedding = await get_embedding(text)
+        _upsert_job(job_id, embedding, {"title": title, "company": company, "location": location, "job_type": job_type})
+        print(f"[Jobs] Embedded job {job_id}")
+    except Exception as e:
+        print(f"[Jobs] Embedding error for {job_id}: {e}")
+
+
+async def remove_job_embedding_background(job_id: str):
+    """Remove a job's embedding from Pinecone when it's closed."""
+    from app.services.pinecone_service import delete_job as _delete_job
+    try:
+        _delete_job(job_id)
+        print(f"[Jobs] Removed embedding for closed job {job_id}")
+    except Exception as e:
+        print(f"[Jobs] Removal error for {job_id}: {e}")
