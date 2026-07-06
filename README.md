@@ -37,5 +37,5 @@ App → http://localhost:5173
 - [x] Phase 2 — Auth (register, login, JWT, roles)
 - [x] Phase 3 — Job listings CRUD
 - [x] Phase 4 — AI matching (OpenAI + Pinecone)
-- [ ] Phase 5 — Resume upload + employer view
+- [x] Phase 5 — Resume upload + employer view
 - [ ] Phase 6 — Deploy
